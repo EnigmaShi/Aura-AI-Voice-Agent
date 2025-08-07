@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aura AI - Voice Assistant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0A0A0A;
+      --card-bg: rgba(22, 22, 22, 0.5);
+      --primary-glow: #00A3FF;
+      --secondary-glow: #7E42F5;
+      --text-primary: #EAEAEA;
+      --text-secondary: #A0A0A0;
+      --border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: auto;
+      padding: 40px 20px;
+      background-image:
+        radial-gradient(circle at 15% 25%, var(--primary-glow), transparent 35%),
+        radial-gradient(circle at 85% 75%, var(--secondary-glow), transparent 35%);
+      background-size: 200% 200%;
+      animation: gradient-flow 15s ease-in-out infinite;
+    }
+
+    @keyframes gradient-flow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      justify-content: center;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(12px);
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .text-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .text-form input {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background-color: rgba(255, 255, 255, 0.05);
+      color: white;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .text-form button,
+    .echo-section button {
+      background: linear-gradient(to right, var(--primary-glow), var(--secondary-glow));
+      color: white;
+      padding: 12px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .text-form button:hover,
+    .echo-section button:hover {
+      opacity: 0.9;
+    }
+
+    .echo-section {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .echo-section audio {
+      margin-top: 8px;
+      width: 100%;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- 🎤 Text to Speech -->
+    <div class="card">
+      <h1>Text to Speech</h1>
+      <p>Type a message and click generate to hear it spoken aloud.</p>
+      <form class="text-form" id="voice-form">
+        <input type="text" id="tts-input" placeholder="Type something..." />
+        <button type="submit" id="submit-text">Generate Voice</button>
+      </form>
+    </div>
+
+    <!-- 🔁 Echo Bot -->
+    <div class="card">
+      <h1>Echo Bot</h1>
+      <p>Record your voice and play it back instantly.</p>
+      <div class="echo-section">
+        <button type="button" id="start-recording">Start Recording</button>
+        <button type="button" id="stop-recording" disabled>Stop Recording</button>
+        <button type="button" id="play-recording" class="hidden">▶ Play Recording</button>
+        <span id="upload-status" style="color: var(--text-secondary); font-size: 0.9rem;"></span>
+        <audio id="audio-playback" controls class="hidden"></audio>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // 🗣 Text to Speech
+    document.getElementById('voice-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const text = document.getElementById('tts-input').value.trim();
+      if (!text) return alert("Please enter some text.");
+
+      fetch('http://127.0.0.1:5000/generate-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.audio_url) {
+          const audio = new Audio(data.audio_url);
+          audio.play();
+        } else {
+          alert("Failed to generate audio.");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error calling voice API.");
+      });
+    });
+
+    // 🎤 Echo Bot
+    const startBtn = document.getElementById("start-recording");
+    const stopBtn = document.getElementById("stop-recording");
+    const playBtn = document.getElementById("play-recording");
+    const audioPlayback = document.getElementById("audio-playback");
+    const uploadStatus = document.getElementById("upload-status");
+
+    let mediaRecorder;
+    let audioChunks = [];
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          mediaRecorder = new MediaRecorder(stream);
+
+          mediaRecorder.ondataavailable = e => {
+            audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            audioPlayback.src = audioUrl;
+            audioPlayback.classList.remove('hidden');
+            playBtn.classList.remove('hidden');
+            audioChunks = [];
+
+
+            // ✅ Upload logic
+            uploadStatus.textContent = "Uploading...";
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'recording.wav');
+
+            fetch('http://127.0.0.1:5000/upload-audio', {
+            method: 'POST',
+            body: formData
+          })
+            .then(response => response.json())
+            .then(data => {
+              if (data.filename) {
+              uploadStatus.textContent = `✅ Uploaded: ${data.filename} (${data.content_type}, ${data.size} bytes)`;
+            } else {
+              uploadStatus.textContent = "❌ Upload failed.";
+            }
+          })
+            .catch(err => {
+              console.error(err);
+              uploadStatus.textContent = "❌ Upload error.";
+          });
+
+          };
+
+          startBtn.addEventListener("click", () => {
+            mediaRecorder.start();
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            playBtn.classList.add('hidden');
+            audioPlayback.classList.add('hidden');
+            uploadStatus.textContent = "";
+          });
+
+          stopBtn.addEventListener("click", () => {
+            mediaRecorder.stop();
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+          });
+
+          playBtn.addEventListener("click", () => {
+            audioPlayback.play();
+          });
+
+        })
+        .catch(error => {
+          alert("Microphone access denied. Echo Bot won't work.");
+          console.error(error);
+        });
+    } else {
+      alert("Your browser doesn't support audio recording.");
+    }
+  </script>
+
+</body>
+</html>
